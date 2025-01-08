@@ -18,7 +18,7 @@ from zoneinfo import ZoneInfo
 from optimize import random_search
 from analysis import *
 from make_directory import make_directory
-from config import time_interval_sec, bound
+from config import time_interval_sec, bounds
 from calc_object_val import calculate_objective_func_val
 matplotlib.use('Agg')
 
@@ -35,7 +35,7 @@ Alg_vec = ["BO", "RS"]
 Opt_purpose = "MinSum" #MinSum, MinMax, MaxSum, MaxMinから選択
 
 initial_design_numdata_vec = [1] #BOのRS回数
-max_iter_vec = [2]            #{10, 20, 20, 50]=10, 30, 50, 100と同値
+max_iter_vec = [3,2]            #{10, 20, 20, 50]=10, 30, 50, 100と同値
 random_iter_vec = max_iter_vec
 
 trial_num = 1  #箱ひげ図作成時の繰り返し回数
@@ -46,7 +46,7 @@ colors6  = ['#4c72b0', '#f28e2b', '#55a868', '#c44e52'] # 論文用の色
 ###############################
 jst = pytz.timezone('Asia/Tokyo')# 日本時間のタイムゾーンを設定
 current_time = datetime.now(jst).strftime("%m-%d-%H-%M")
-base_dir = f"ICCS_result/BORS/{Opt_purpose}_{input_var}{bound}_{trial_base}-{trial_base+trial_num -1}_{current_time}/"
+base_dir = f"ICCS_result/BORS/{Opt_purpose}_{input_var}{bounds}_{trial_base}-{trial_base+trial_num -1}_{current_time}/"
 
 
 cnt_vec = np.zeros(len(max_iter_vec))
@@ -82,10 +82,9 @@ init_file = "init_00000101-000000.000.pe######.nc"
 org_file = "init_00000101-000000.000.pe######.org.nc"
 history_file = "history.pe######.nc"
 
-orgfile = f'no-control_{str(time_interval_sec)}.pe######.nc'
 file_path = os.path.dirname(os.path.abspath(__file__))
 gpyoptfile=f"gpyopt.pe######.nc"
-
+orgfile = f'no-control_{str(time_interval_sec)}.pe######.nc'
 
 ### SCALE-RM関連関数
 def prepare_files(pe: int):

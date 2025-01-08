@@ -11,7 +11,7 @@ import pytz
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from config import bound, time_interval_sec, w_max, w_min, crossover_rate, mutation_rate, lower_bound, upper_bound, alpha, tournament_size
+from config import time_interval_sec, w_max, w_min, crossover_rate, mutation_rate, bounds, types, lower_bound, upper_bound, alpha, tournament_size
 from optimize import *
 from analysis import *
 from make_directory import make_directory
@@ -25,14 +25,12 @@ PSOGAのシミュレーション
 #### User 設定変数 ##############
 
 input_var = "MOMY" # MOMY, RHOT, QVから選択
-max_input = bound
 Alg_vec = ["PSO", "GA"]
 
-gene_length = 3
 Opt_purpose = "MinSum" #MinSum, MinMax, MaxSum, MaxMinから選択
 
-particles_vec = [5]           # 粒子数
-iterations_vec = [2]        # 繰り返し回数
+particles_vec = [5, 10,10, 10, 10]           # 粒子数
+iterations_vec = [2, 3, 5, 10, 15]        # 繰り返し回数
 pop_size_vec = particles_vec  # Population size
 num_generations_vec = iterations_vec  # Number of generations
 
@@ -40,7 +38,7 @@ num_generations_vec = iterations_vec  # Number of generations
 c1 = 2.0
 c2 = 2.0
 
-trial_num = 1  # 乱数種の数
+trial_num = 5  # 乱数種の数
 trial_base = 0
 
 dpi = 75 # 画像の解像度　スクリーンのみなら75以上　印刷用なら300以上
@@ -48,7 +46,7 @@ colors6  = ['#4c72b0', '#f28e2b', '#55a868', '#c44e52'] # 論文用の色
 ###############################
 jst = pytz.timezone('Asia/Tokyo')# 日本時間のタイムゾーンを設定
 current_time = datetime.now(jst).strftime("%m-%d-%H-%M")
-base_dir = f"ICCS_result/PSOGA/{Opt_purpose}_{input_var}{bound}_{trial_base}-{trial_base+trial_num -1}_{current_time}/"
+base_dir = f"ICCS_result/PSOGA/{Opt_purpose}_{input_var}{upper_bound[2]}_{trial_base}-{trial_base+trial_num -1}_{current_time}/"
 cnt_vec = np.zeros(len(particles_vec))
 for i in range(len(particles_vec)):
      cnt_vec[i] = int(particles_vec[i])*int(iterations_vec[i])
@@ -88,8 +86,8 @@ def prepare_files(pe: int):
 
 def update_netcdf(init: str, output: str, pe: int, control_input):
     """NetCDFファイルの変数を更新する"""
-    Ygrid = control_input[0]
-    Zgrid = control_input[1]
+    Ygrid = int(round(control_input[0]))  # 第一遺伝子を整数にキャスト
+    Zgrid = int(round(control_input[1]))  # 第二遺伝子を整数にキャスト
     input_MOMY = control_input[2]
     pos = 0 # pe の役割
     if Ygrid > 19:
@@ -214,9 +212,7 @@ def main():
     with open(config_file_path, 'w') as f:
 
         f.write(f"\ninput_var ={input_var}")
-        f.write(f"\nmax_input ={max_input}")
         f.write(f"\nAlg_vec ={Alg_vec}")
-        f.write(f"\nnum_input_grid ={num_input_grid}")
         f.write(f"\nOpt_purpose ={Opt_purpose}")
         f.write(f"\nparticles_vec = {particles_vec}")
         f.write(f"\niterations_vec = {iterations_vec}")
@@ -228,7 +224,6 @@ def main():
         f.write(f"w_min={w_min}\n")
         f.write(f"c1={c1}\n")
         f.write(f"c2={c2}\n")
-        f.write(f"gene_length={gene_length}\n")
         f.write(f"crossover_rate={crossover_rate}\n")
         f.write(f"mutation_rate={mutation_rate}\n")
         f.write(f"lower_bound={lower_bound}\n")
@@ -261,11 +256,9 @@ def main():
 
                 ###PSO
                 random_reset(trial_i+trial_base)
-                # 入力次元と最小値・最大値の定義
-                bounds = [Integer(0, 39), Integer(0, 96), Real(-max_input, max_input)] # 探索範囲
 
                 start = time.time()  # 現在時刻（処理開始前）を取得
-                best_position, result_value  = PSO(black_box_function, bounds_MOMY, particles_vec[exp_i], iterations_vec[exp_i], f_PSO)
+                best_position, result_value  = PSO(black_box_function, bounds,types,  particles_vec[exp_i], iterations_vec[exp_i], f_PSO)
                 end = time.time()  # 現在時刻（処理完了後）を取得
                 time_diff = end - start
                 f_PSO.write(f"\n最小値:{result_value[iterations_vec[exp_i]-1]}")
@@ -284,9 +277,9 @@ def main():
                 start = time.time()  # 現在時刻（処理開始前）を取得
                 # Run GA with the black_box_function as the fitness function
                 best_fitness, best_individual = genetic_algorithm(black_box_function,
-                    pop_size_vec[exp_i], gene_length, num_generations_vec[exp_i],
+                    pop_size_vec[exp_i], num_generations_vec[exp_i],
                     crossover_rate, mutation_rate, lower_bound, upper_bound,
-                    alpha, tournament_size, f_GA)
+                    alpha, tournament_size, types, f_GA)
                 end = time.time()  # 現在時刻（処理完了後）を取得
                 time_diff = end - start
 

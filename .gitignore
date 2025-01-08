@@ -1,3 +1,4 @@
 # binary fileを除外
 *.nc
-
+# 結果fileも除外
+/ICCS_result

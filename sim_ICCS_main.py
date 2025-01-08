@@ -3,25 +3,13 @@ import json
 import sys
 import os
 
-# 時刻を計測するライブラリ
-import time
-import pytz
-from datetime import datetime
-from zoneinfo import ZoneInfo
 
-trial_base = 0
-trial_num = 1
 
-def load_config(config_file='config.json'):
-    with open(config_file, 'r') as f:
-        config = json.load(f)
-    return config
-
-def run_script(script_name, config_file='config.json', base_dir):
+def run_script(script_name):
     try:
         # コマンドライン引数として config_file を渡す
         result = subprocess.run(
-            ['python', script_name, config_file, base_dir],
+            ['python', script_name],
             check=True,
             capture_output=True,
             text=True
@@ -31,19 +19,13 @@ def run_script(script_name, config_file='config.json', base_dir):
         print(f"Error occurred while running {script_name}: {e.stderr}", file=sys.stderr)
 
 def main():
-    jst = pytz.timezone('Asia/Tokyo')# 日本時間のタイムゾーンを設定
-    current_time = datetime.now(jst).strftime("%m-%d-%H-%M")
-    base_dir = f"ICCS_result/{trial_base}-{trial_base+trial_num -1}_{current_time}/"
-
     # 実行したいスクリプトのリスト
     scripts = [
-        'sim_ICCS_BO.py', 'plt_fig.py'
+        'sim_ICCS_BORS.py', 'sim_ICCS_PSOGA.py'
         # 他のスクリプトをここに追加
         # 'another_script.py',
         # 'yet_another_script.py',
     ]
-
-    config_file = 'config.json'
 
     # スクリプトが存在するか確認
     for script in scripts:
@@ -54,7 +36,7 @@ def main():
     # 各スクリプトを順番に実行
     for script in scripts:
         print(f"Running {script}...")
-        run_script(script, config_file, base_dir)
+        run_script(script)
         print(f"Finished running {script}.\n")
 
 if __name__ == "__main__":
