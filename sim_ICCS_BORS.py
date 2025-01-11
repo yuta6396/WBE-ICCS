@@ -34,11 +34,11 @@ max_input = 30 #20240830現在ではMOMY=30, RHOT=10, QV=0.1にしている
 Alg_vec = ["BO", "RS"]
 Opt_purpose = "MinSum" #MinSum, MinMax, MaxSum, MaxMinから選択
 
-initial_design_numdata_vec = [1] #BOのRS回数
-max_iter_vec = [3,2]            #{10, 20, 20, 50]=10, 30, 50, 100と同値
+initial_design_numdata_vec = [10] #BOのRS回数
+max_iter_vec = [15, 15, 20, 50, 50, 50, 50, 50]            #{10, 20, 20, 50]=10, 30, 50, 100と同値
 random_iter_vec = max_iter_vec
 
-trial_num = 1  #箱ひげ図作成時の繰り返し回数
+trial_num = 10  #箱ひげ図作成時の繰り返し回数
 trial_base = 0
 
 dpi = 75 # 画像の解像度　スクリーンのみなら75以上　印刷用なら300以上
