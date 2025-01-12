@@ -29,8 +29,8 @@ Alg_vec = ["PSO", "GA"]
 
 Opt_purpose = "MinSum" #MinSum, MinMax, MaxSum, MaxMinから選択
 
-particles_vec = [10, 10, 10]           # 粒子数
-iterations_vec = [20, 25, 30]        # 繰り返し回数
+particles_vec = [5]           # 粒子数
+iterations_vec = [3]        # 繰り返し回数
 pop_size_vec = particles_vec  # Population size
 num_generations_vec = iterations_vec  # Number of generations
 
