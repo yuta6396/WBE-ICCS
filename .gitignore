@@ -1,9 +1,11 @@
 # binary fileを除外
-out*.nc
-gpyopt*.nc
-history*.nc
+# out*.nc
+# gpyopt*.nc
+# history*.nc
+*.nc
 *.sh
 *.html
+LOG*
 # 結果fileも除外
 /ICCS_result
 /test_result
