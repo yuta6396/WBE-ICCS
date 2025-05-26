@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import matplotlib
 import subprocess
 import requests
+import contextlib
 from skopt import gp_minimize
 from skopt.acquisition import gaussian_ei
 from skopt.plots import plot_gaussian_process
@@ -15,11 +16,10 @@ import pytz
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from optimize import random_search
 from analysis import *
 from make_directory import make_directory
 from config import time_interval_sec, bounds
-from calc_object_val import calculate_objective_func_val
+from calc_object_val import calculate_objective_func_val, calculate_objective_sim_val
 matplotlib.use('Agg')
 
 """
@@ -30,15 +30,13 @@ BORSのシミュレーション
 #### User 設定変数 ##############
 
 input_var = "MOMY" # MOMY, RHOT, QVから選択
-max_input = 30 #20240830現在ではMOMY=30, RHOT=10, QV=0.1にしている
-Alg_vec = ["BO", "RS"]
+max_input = 30#20240830現在ではMOMY=30, RHOT=10, QV=0.1にしている
 Opt_purpose = "MinSum" #MinSum, MinMax, MaxSum, MaxMinから選択
 
-initial_design_numdata_vec = [10] #BOのRS回数
-max_iter_vec = [15, 15, 20, 50, 50, 50, 50, 50]            #{10, 20, 20, 50]=10, 30, 50, 100と同値
-random_iter_vec = max_iter_vec
+random_iter_vec = [15]            #{10, 20, 20, 50]=10, 30, 50, 100と同値
+# random_iter_vec = [3, 2]  
 
-trial_num = 10  #箱ひげ図作成時の繰り返し回数
+trial_num = 1  #箱ひげ図作成時の繰り返し回数
 trial_base = 0
 
 dpi = 75 # 画像の解像度　スクリーンのみなら75以上　印刷用なら300以上
@@ -46,15 +44,15 @@ colors6  = ['#4c72b0', '#f28e2b', '#55a868', '#c44e52'] # 論文用の色
 ###############################
 jst = pytz.timezone('Asia/Tokyo')# 日本時間のタイムゾーンを設定
 current_time = datetime.now(jst).strftime("%m-%d-%H-%M")
-base_dir = f"ICCS_result/BORS/{Opt_purpose}_{input_var}{bounds}_{trial_base}-{trial_base+trial_num -1}_{current_time}/"
+base_dir = f"ICCS_result/RS/{Opt_purpose}_{input_var}_seed={trial_base}-{trial_base+trial_num -1}_{current_time}/"
 
 
-cnt_vec = np.zeros(len(max_iter_vec))
-for i in range(len(max_iter_vec)):
+cnt_vec = np.zeros(len(random_iter_vec))
+for i in range(len(random_iter_vec)):
     if i == 0:
-        cnt_vec[i] = int(max_iter_vec[i])
+        cnt_vec[i] = int(random_iter_vec[i])
     else :
-        cnt_vec[i] = int(cnt_vec[i-1] + max_iter_vec[i])
+        cnt_vec[i] = int(cnt_vec[i-1] + random_iter_vec[i])
 """
 gp_minimize で獲得関数を指定: acq_func。
 gp_minimize の呼び出しにおける主要なオプションは次の通りです。
@@ -216,9 +214,44 @@ def black_box_function(control_input):
 
     return objective_val
 
+def random_search(objective_function, bounds, f_in, f_RS, RS_ratio_matrix, trial_i):
+    # 以前の最良のスコアとパラメータを初期化
+    for i in range(len(random_iter_vec)):
+        input_history=[]
+        if i==0:
+            best_score = float('inf')
+            best_params = None
+        for _ in range(random_iter_vec[i]):
+            candidate = []
+            for b in bounds:
+                if b[0] == 'int':
+                    # 整数値を生成
+                    value = np.random.randint(b[1], b[2] + 1)  # 上限は含まないため +1
+                elif b[0] == 'float':
+                    # 実数値を生成
+                    value = np.random.uniform(b[1], b[2])
+                else:
+                    raise ValueError(f"Unsupported type: {b[0]}")
+                candidate.append(value)
+            input_history.append(candidate)
+            score = objective_function(candidate)
+            if score < best_score:
+                best_score = score
+                best_params = candidate
 
+        sum_co, sum_no = sim(best_params)
+        sum_RS_MOMY = sum_co
+        RS_ratio_matrix[i, trial_i] =  calculate_objective_sim_val(sum_co, Opt_purpose)
+        f_in.write(f"BBF={cnt_vec[i]}\n input_history=\n{input_history}\n\n\n")
+        f_RS.write(f"\nnum_evaluation of BBF = {cnt_vec[i]}") 
+        f_RS.write(f"\n最小値:{best_score}")
+        f_RS.write(f"\n入力値:{best_params}\n\n")
+    if trial_i == trial_num-1:
+        f_RS.write(f"\n全結果:\n{RS_ratio_matrix}\n\n\n")
+    return 
 ###実行
 def main():
+    print(Opt_purpose)
     make_directory(base_dir)
     
     filename = f"config.txt"
@@ -227,115 +260,39 @@ def main():
     with open(config_file_path, 'w') as f:
         f.write(f"input_var ={input_var}")
         f.write(f"\nmax_input ={max_input}")
-        f.write(f"\nAlg_vec ={Alg_vec}")
         f.write(f"\nOpt_purpose ={Opt_purpose}")
-        f.write(f"\ninitial_design_numdata_vec = {initial_design_numdata_vec}")
-        f.write(f"\nmax_iter_vec = {max_iter_vec}")
         f.write(f"\nrandom_iter_vec = {random_iter_vec}")
         f.write(f"\ntrial_num = {trial_num}")
         f.write(f"\n{time_interval_sec=}")
 
-    BO_ratio_matrix = np.zeros((len(max_iter_vec), trial_num)) # iterの組み合わせ, 試行回数
-    RS_ratio_matrix = np.zeros((len(max_iter_vec), trial_num))
-    BO_time_matrix = np.zeros((len(max_iter_vec), trial_num)) 
-    RS_time_matrix = np.zeros((len(max_iter_vec), trial_num))
+    RS_ratio_matrix = np.zeros((len(random_iter_vec), trial_num))
 
-    BO_file = os.path.join(base_dir, "summary", f"{Alg_vec[0]}.txt")
-    RS_file = os.path.join(base_dir, "summary", f"{Alg_vec[1]}.txt")
+    RS_file = os.path.join(base_dir, "summary", "RS.txt")
+    RS_input_file = os.path.join(base_dir, "summary", "RS_input_data.txt")
     progress_file = os.path.join(base_dir, "progress.txt")
 
 
-    with open(BO_file, 'w') as f_BO, open(RS_file, 'w') as f_RS:
+    with open(RS_file, 'w') as f_RS, open(RS_input_file, 'w') as f_in:
         for trial_i in range(trial_num):
-            cnt_base = 0
-            for exp_i in range(len(max_iter_vec)):
-                if exp_i > 0:
-                    cnt_base  = cnt_vec[exp_i - 1]
+            ###RS
+            random_reset(trial_i+trial_base)
+            # パラメータの設定
+            # bounds_MOMY = [(-max_input, max_input)]*num_input_grid  # 探索範囲
+            bounds = [
+                        ('int', 0, 39),
+                        ('int', 0, 96),
+                        ('float', -max_input, max_input)
+                    ]
 
-                ###BO
-                random_reset(trial_i+trial_base)
-            # 入力次元と最小値・最大値の定義
-                bounds = [Integer(0, 39), Integer(0, 96), Real(-max_input, max_input)]
-
-                start = time.time()  # 現在時刻（処理開始前）を取得
-                # ベイズ最適化の実行
-                if exp_i == 0:
-                    result = gp_minimize(
-                        func=black_box_function,        # 最小化する関数
-                        dimensions=bounds,              # 探索するパラメータの範囲
-                        acq_func="EI",
-                        n_calls=max_iter_vec[exp_i],    # 最適化の反復回数
-                        n_initial_points=initial_design_numdata_vec[exp_i],  # 初期探索点の数
-                        verbose=True,                   # 最適化の進行状況を表示
-                        initial_point_generator = "random",
-                        random_state = trial_i
-                    )
-                else:
-                    result = gp_minimize(
-                        func=black_box_function,        # 最小化する関数
-                        dimensions=bounds,              # 探索するパラメータの範囲
-                        acq_func="EI",
-                        n_calls=max_iter_vec[exp_i],    # 最適化の反復回数
-                        n_initial_points=0,  # 初期探索点の数
-                        verbose=True,                   # 最適化の進行状況を表示
-                        initial_point_generator = "random",
-                        random_state = trial_i,
-                        x0=initial_x_iters,
-                        y0=initial_y_iters
-                    )           
-                end = time.time()  # 現在時刻（処理完了後）を取得
-                time_diff = end - start
-
-                # 最適解の取得
-                min_value = result.fun
-                min_input = result.x
-                initial_x_iters = result.x_iters
-                initial_y_iters = result.func_vals
-                f_BO.write(f"\n input\n{result.x_iters}")
-                f_BO.write(f"\n output\n {result.func_vals}")
-                f_BO.write(f"\n最小値:{min_value}")
-                f_BO.write(f"\n入力値:{min_input}")
-                f_BO.write(f"\n経過時間:{time_diff}sec")
-                f_BO.write(f"\nnum_evaluation of BBF = {cnt_vec[exp_i]}")
-                sum_co, sum_no = sim(min_input)
-                BO_ratio_matrix[exp_i, trial_i] = calculate_objective_func_val(sum_co, Opt_purpose)
-                BO_time_matrix[exp_i, trial_i] = time_diff
-
-
-                ###RS
-                random_reset(trial_i+trial_base)
-                # パラメータの設定
-                # bounds_MOMY = [(-max_input, max_input)]*num_input_grid  # 探索範囲
-                bounds = [
-                            ('int', 0, 39),
-                            ('int', 0, 96),
-                            ('float', -max_input, max_input)
-                        ]
-
-                start = time.time()  # 現在時刻（処理開始前）を取得
-                if exp_i == 0:
-                    best_params, best_score = random_search(black_box_function, bounds, random_iter_vec[exp_i], f_RS)
-                else:
-                    best_params, best_score = random_search(black_box_function, bounds, random_iter_vec[exp_i], f_RS, previous_best=(best_params, best_score))
-                end = time.time()  # 現在時刻（処理完了後）を取得
-                time_diff = end - start
-
-                f_RS.write(f"\n最小値:{best_score}")
-                f_RS.write(f"\n入力値:{best_params}")
-                f_RS.write(f"\n経過時間:{time_diff}sec")
-                f_RS.write(f"\nnum_evaluation of BBF = {cnt_vec[exp_i]}")
-                sum_co, sum_no = sim(best_params)
-                sum_RS_MOMY = sum_co
-                RS_ratio_matrix[exp_i, trial_i] =  calculate_objective_func_val(sum_co, Opt_purpose)
-                RS_time_matrix[exp_i, trial_i] = time_diff
+            random_search(black_box_function, bounds,  f_in, f_RS, RS_ratio_matrix,trial_i)
 
     #シミュレーション結果の可視化
     filename = f"summary.txt"
     config_file_path = os.path.join(base_dir, "summary", filename)  
     f = open(config_file_path, 'w')
 
-    vizualize_simulation(BO_ratio_matrix, RS_ratio_matrix, BO_time_matrix, RS_time_matrix, max_iter_vec,
-            f, base_dir, dpi, Alg_vec, colors6, trial_num, cnt_vec)
+    # vizualize_simulation(BO_ratio_matrix, RS_ratio_matrix, BO_time_matrix, RS_time_matrix, random_iter_vec,
+    #         f, base_dir, dpi, Alg_vec, colors6, trial_num, cnt_vec)
     f.close()
 
 def notify_slack(webhook_url, message, channel=None, username=None, icon_emoji=None):

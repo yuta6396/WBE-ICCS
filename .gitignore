@@ -1,4 +1,10 @@
 # binary fileを除外
-*.nc
+out*.nc
+gpyopt*.nc
+history*.nc
+*.sh
+*.html
 # 結果fileも除外
 /ICCS_result
+/test_result
+/plt_InitValue

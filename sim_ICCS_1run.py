@@ -15,7 +15,7 @@ from config import time_interval_sec, w_max, w_min, crossover_rate, mutation_rat
 from optimize import *
 from analysis import *
 from make_directory import make_directory
-from calc_object_val import calculate_objective_func_val
+from calc_object_val import calculate_objective_func_val, calculate_objective_sim_val
 
 import pandas as pd
 import plotly.graph_objs as go
@@ -29,15 +29,14 @@ GSシミュレーション
 #### User 設定変数 ##############
 
 input_var = "MOMY" # MOMY, RHOT, QVから選択
-
-Opt_purpose = "MinSum" #MinSum, MinMax, MaxSum, MaxMinから選択
+Opt_purpose = "MinSum" #MinSum, MinMax, MaxSum, MaxMinから選択 #ICCSはMinSum
 
 dpi = 75 # 画像の解像度　スクリーンのみなら75以上　印刷用なら300以上
 colors6  = ['#4c72b0', '#f28e2b', '#55a868', '#c44e52'] # 論文用の色
 ###############################
 jst = pytz.timezone('Asia/Tokyo')# 日本時間のタイムゾーンを設定
 current_time = datetime.now(jst).strftime("%m-%d-%H-%M")
-base_dir = f"ICCS_result/GS/{Opt_purpose}_{input_var}{upper_bound[2]}_{current_time}/"
+base_dir = f"ICCS_result/1run/{Opt_purpose}_{input_var}{upper_bound[2]}_{current_time}/"
 
 
 nofpe = 2
@@ -111,7 +110,6 @@ def sim(control_input):
     """
     制御入力決定後に実際にその入力値でシミュレーションする
     """
-    #control_input = [0, 0, 0] # 制御なしを見たいとき
     for pe in range(nofpe):
         init, output = prepare_files(pe)
         init = update_netcdf(init, output, pe, control_input)
@@ -148,112 +146,49 @@ def sim(control_input):
                 sum_co[y_i] += dat[t_j,0,y_i,0]*time_interval_sec
                 sum_no[y_i] += odat[t_j,0,y_i,0]*time_interval_sec
 
-    objective_val = calculate_objective_func_val(sum_co, Opt_purpose)
-    return objective_val
+    objective_val = calculate_objective_sim_val(sum_co, Opt_purpose)
+    return objective_val, sum_co, sum_no
 
-def grid_search(objective_function, f):
-    best_score = float('inf')
-    best_params = None
-    # 結果を保存するためのリスト
-    results = []
+def plot_bar_graph(sum_co, sum_no):
+    """
+    sum_co, sum_no: それぞれ長さ40のnumpy配列
+    """
+    indices = np.arange(len(sum_co))  # インデックス0～39
+
+    plt.figure(figsize=(12, 5))
     
-    # 各組み合わせについて評価
-    cnt = 0
-    for y_i in range(0, 40, 1):
-        for z_i in range(0, 30, 1):
-            for momy_i in range(35, 61, 5):
-                score = objective_function([y_i, z_i, momy_i/2])
-                results.append({'Y': y_i, 'Z': z_i, 'MOMY': momy_i, 'score': score})
-
-                cnt += 1
-                print(f"{cnt=}")
-                if score < best_score:
-                    best_score = score
-                    best_params = [y_i, z_i, momy_i]
-                    f.write(f"\ncnt={cnt}: params=[{y_i}, {z_i}, {momy_i}],  best_score={best_score}")
-    # 結果をデータフレームに変換
-    results_df = pd.DataFrame(results)
-    # データの確認
-    print("\nグリッドサーチの結果:")
-    print(results_df)
-    return best_params, best_score, results_df
-
-def plt_3D_scatter(df, base_dir):
-    # 3D散布図の作成
-    # scatter = go.Scatter3d(
-    #     x=df['Y'],
-    #     y=df['Z'],
-    #     z=df['MOMY'],
-    #     mode='markers',
-    #     marker=dict(
-    #         size=5,
-    #         color=df['score'],
-    #         colorscale='Viridis',  # カラーマップの選択
-    #         colorbar=dict(title='Score'),
-    #         opacity=0.8
-    #     )
-    # )
-
-    score_min = df['score'].min()
-    score_max = df['score'].max()
-    # 100を中心に対称にするための幅を計算
-    delta = max(abs(score_min - 100), abs(score_max - 100))
-
-    scatter = go.Scatter3d(
-        x=df['Y'],
-        y=df['Z'],
-        z=df['MOMY'],
-        mode='markers',
-        marker=dict(
-            size=5,
-            color=df['score'],
-            # Plotly の組み込みダイバージングカラーマップ
-            colorscale='RdBu',  
-            cmin=100 - delta,   # カラーバーの最小値
-            cmax=100 + delta,   # カラーバーの最大値
-            colorbar=dict(
-                title='Score',
-                tickmode='array',
-                tickvals=[100 - delta, 100, 100 + delta],
-                ticktext=[f'{100-delta:.1f}', '100', f'{100+delta:.1f}']
-            ),
-            opacity=0.8
-        )
-    )
-
-    # レイアウトの設定
-    layout = go.Layout(
-        title='3D Heatmap of Grid Search Results',
-        scene=dict(
-            xaxis_title='Y',
-            yaxis_title='Z',
-            zaxis_title='MOMY'
-        )
-    )
-
-    fig = go.Figure(data=[scatter], layout=layout)
-    filename = os.path.join(base_dir,  f"grid_search_3d_heatmap.html")
-    fig.write_html(filename)
-    # 静的な画像として保存（例: PNG形式）
-    filename = os.path.join(base_dir,  f"grid_search_3d_heatmap.png")
-    fig.write_image(filename)
-    return 
-
+    # sum_co の棒グラフ
+    plt.subplot(1, 2, 1)
+    plt.bar(indices, sum_co, color='skyblue')
+    plt.xlabel("Y")
+    plt.ylabel("PREC [mm/h]")
+    plt.title("Bar Graph for TEST")
+    
+    # sum_no の棒グラフ
+    plt.subplot(1, 2, 2)
+    plt.bar(indices, sum_no, color='salmon')
+    plt.xlabel("Y")
+    plt.ylabel("PREC [mm/h]")
+    plt.title("Bar Graph for CTRL")
+    
+    plt.tight_layout()
+    pdf_path = os.path.join(base_dir, "bar_graph.pdf")
+    # PDF として保存
+    plt.savefig(pdf_path, format="pdf")
+    print(f"Figure saved as {pdf_path}")
 
 ###実行
 def main():
     os.makedirs(base_dir, exist_ok=True)
     output_file_path = os.path.join(base_dir, f'summary.txt')
     with open(output_file_path, 'w') as f:
-        f.write(f"\ninput_var ={input_var}")
-        f.write(f"\n{time_interval_sec=}")
-
-        # グリッドサーチの実行
-        best_params, best_score, df = grid_search(sim, f)
-        plt_3D_scatter(df, base_dir)
-        df.to_csv(os.path.join(base_dir, 'results_df.csv'), index=False, encoding='utf-8-sig')
-        f.write(f"\nBest parameters: {best_params}\n")
-        print(f"Best score: {best_score}")
+        # [0, 39], [0, 96], (-30, 30)
+        objective_val, sum_co, sum_no = sim( [17, 6, 30])
+        # 300回の時の最適解　BO [20, 5, -24.92778677955823] RS[15, 3, 25.09999404257084] PSO [17, 6, 30] GA[13,14, 29.67936212]
+        f.write(f"{sum_co=}\n\n")
+        f.write(f"{sum_no=}")
+        plot_bar_graph(sum_co, sum_no)
+        print(objective_val)
 
 
 def notify_slack(webhook_url, message, channel=None, username=None, icon_emoji=None):

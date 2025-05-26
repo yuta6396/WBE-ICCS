@@ -81,10 +81,10 @@ def figire_LineGraph(BO_vec, RS_vec, central_value, base_dir, dpi, Alg_vec, colo
     plt.close()
     return
 
-def write_summary(BO_vec, RS_vec, central_value:str, f, trial_num, cnt_vec):
+def write_summary(PSO_vec, GA_vec, central_value:str, f, trial_num, cnt_vec):
     f.write(f"\n{central_value} Accumulated PREC(%) {trial_num} times; BBF={cnt_vec}")
-    f.write(f"\n{BO_vec=}")
-    f.write(f"\n{RS_vec=}")
+    f.write(f"\n{PSO_vec=}")
+    f.write(f"\n{GA_vec=}")
     return 
 
 def central_summary(BO_vec, RS_vec, central_value:str, f, base_dir, dpi, Alg_vec, color, trial_num:int, cnt_vec):
